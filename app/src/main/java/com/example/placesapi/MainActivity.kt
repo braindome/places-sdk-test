@@ -1,19 +1,33 @@
 package com.example.placesapi
 
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -22,6 +36,13 @@ import com.example.placesapi.localdb.NearbyPlaceDatabase
 import com.example.placesapi.localdb.NearbyPlaceViewModel
 import com.example.placesapi.ui.screens.LocationListScreen
 import com.example.placesapi.ui.theme.PlacesAPITheme
+import com.google.android.gms.common.api.ApiException
+import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.Place
+import com.google.android.libraries.places.api.net.FetchPhotoRequest
+import com.google.android.libraries.places.api.net.FetchPhotoResponse
+import com.google.android.libraries.places.api.net.FetchPlaceRequest
+import com.google.android.libraries.places.api.net.FetchPlaceResponse
 
 const val TAG = "MainActivity"
 const val apiKey =  BuildConfig.PLACES_API_KEY
@@ -55,9 +76,15 @@ class MainActivity : ComponentActivity() {
         }
     )
 
+    private var bitmap by mutableStateOf<ImageBitmap?>(null)
+    private var loadedBitmapResourceId by mutableStateOf<Int?>(null)
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+
 
         if (apiKey.isEmpty() || apiKey == "DEFAULT_API_KEY") {
             Log.e("Places test", "No api key")
@@ -65,10 +92,12 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+
         setContent {
+
             PlacesAPITheme {
                 val state by viewModel.state.collectAsState()
-                // A surface container using the 'background' color from the theme
+
                 Surface(
                     modifier = Modifier.padding(20.dp),
                     color = MaterialTheme.colorScheme.background
@@ -82,13 +111,77 @@ class MainActivity : ComponentActivity() {
                         Button(onClick = { viewModel.getPlaceById("ChIJWV3PC2PzT0YR-_gAuGdqTNQ") }) {
                             Text(text = "Get Place Info")
                         }
+                        Button(onClick = { getLocationPhotoById("ChIJWV3PC2PzT0YR-_gAuGdqTNQ") }) {
+                            Text(text = "Get Place Image")
+                        }
                         //LocationListScreen(state = state)
+                        bitmap?.let {
+                            Image(
+                                bitmap = it,
+                                contentDescription = "Location image",
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(30.dp))
+                                    .size(300.dp)
+                            )
+                        }
+                        
                     }
 
 
                 }
             }
         }
+    }
+
+    fun getLocationPhotoById(placeId: String) {
+
+        Places.initialize(application, apiKey)
+
+        val placesClient = Places.createClient(application)
+
+        // Specify fields. Requests for photos must always have the PHOTO_METADATAS field.
+        val fields = listOf(Place.Field.PHOTO_METADATAS)
+
+        // Get a Place object (this example uses fetchPlace(), but you can also use findCurrentPlace())
+        val placeRequest = FetchPlaceRequest.newInstance(placeId, fields)
+
+        placesClient.fetchPlace(placeRequest)
+            .addOnSuccessListener { response: FetchPlaceResponse ->
+                val place = response.place
+
+                // Get the photo metadata.
+                val metada = place.photoMetadatas
+                if (metada == null || metada.isEmpty()) {
+                    Log.w(TAG, "No photo metadata.")
+                    return@addOnSuccessListener
+                }
+                val photoMetadata = metada.first()
+
+                // Get the attribution text.
+                val attributions = photoMetadata?.attributions
+
+                // Create a FetchPhotoRequest.
+                val photoRequest = FetchPhotoRequest.builder(photoMetadata)
+                    .setMaxWidth(500) // Optional.
+                    .setMaxHeight(300) // Optional.
+                    .build()
+                placesClient.fetchPhoto(photoRequest)
+                    .addOnSuccessListener { fetchPhotoResponse: FetchPhotoResponse ->
+                        val loadedBitmap = fetchPhotoResponse.bitmap
+                        //imageView.setImageBitmap(bitmap)
+                        bitmap = loadedBitmap.asImageBitmap()
+
+
+                    }.addOnFailureListener { exception: Exception ->
+                        if (exception is ApiException) {
+                            Log.e(TAG, "Place not found: " + exception.message)
+                            val statusCode = exception.statusCode
+                            TODO("Handle error with given status code.")
+                        }
+                    }
+            }
+
+
     }
 
 
