@@ -60,16 +60,19 @@ class NearbyPlaceViewModel(
 
     fun getPlaceById(placeId: String) {
         // Specify the fields to return.
-        val placesClient = Places.createClient(application)
+        // Places.initialize(application, apiKey)
+        // Places.initializeWithNewPlacesApiEnabled(application, apiKey)
 
-        val placeFields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS)
+        val placesClient = Places.createClient(application)
+        val placeFields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.TYPES)
 
         val request = FetchPlaceRequest.newInstance(placeId, placeFields)
 
         placesClient.fetchPlace(request)
             .addOnSuccessListener { response: FetchPlaceResponse ->
                 val place = response.place
-                Log.i(TAG, "Place found: ${place.name}, ID: ${place.id}, Photo Metadata: ${place.photoMetadatas}")
+                // Log.d(TAG, "Inside vm")
+                Log.i(TAG, "Called from View Model. Place found: ${place.name}, ID: ${place.id}, Type: ${place.placeTypes}")
             }.addOnFailureListener { exception: Exception ->
                 if (exception is ApiException) {
                     Log.e(TAG, "Place not found: ${exception.message}")
